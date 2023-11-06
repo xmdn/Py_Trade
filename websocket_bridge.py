@@ -6,6 +6,7 @@ import json
 NEGOTIATE_URI = 'http://localhost:5000/hub/negotiate?negotiateVersion=0'
 SIGNALR_URI_TEMPLATE = "ws://localhost:5000/hub?id={}"
 
+STOP_EVENT = asyncio.Event()
 
 def toSignalRMessage(data):
     return f'{json.dumps(data)}\u001e'
@@ -18,6 +19,7 @@ async def handshake(signalr_ws):
 
 
 async def binance_to_signalr_websocket(first_ticker, second_ticker, interval):
+    STOP_EVENT.clear()
     binance_uri = f"wss://stream.binance.com:9443/ws/{first_ticker}{second_ticker}@kline_{interval}"
 
     negotiation = requests.post(NEGOTIATE_URI).json()
@@ -28,7 +30,7 @@ async def binance_to_signalr_websocket(first_ticker, second_ticker, interval):
             websockets.connect(signalr_uri) as signalr_ws:
         await handshake(signalr_ws)
 
-        while True:
+        while not STOP_EVENT.is_set():
             binance_message = await binance_ws.recv()
 
             # Create a message format for SignalR hub
@@ -46,3 +48,6 @@ async def binance_to_signalr_websocket(first_ticker, second_ticker, interval):
 
 def start_websocket_bridge(first_ticker, second_ticker, interval):
     asyncio.run(binance_to_signalr_websocket(first_ticker, second_ticker, interval))
+
+def stop_websocket_bridge():
+    STOP_EVENT.set()
